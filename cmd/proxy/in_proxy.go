@@ -80,14 +80,15 @@ func (inProxyServer InProxyServer) proc(ln net.Listener) error {
 					//log.Println("开始Http协议解析")
 					inProxyServer.HttpProc(conn, reader)
 				} else {
+					log.Println(header)
 					writer := bufio.NewWriter(conn)
 					var body = "收到!" + mgr.Version + "\n"
-					var respContent = "HTTP/1.1 200 OK\nServer: idefav\nContent-Type: text/html;charset=UTF-8\nContent-Length: " + strconv.Itoa(len(body)) + "\n\n" + body + "\n"
-					count, err := writer.WriteString(respContent)
+					var respContent = "HTTP/1.1 415 Unsupported Media Type\nServer: idefav\nContent-Type: text/html;charset=UTF-8\nContent-Length: " + strconv.Itoa(len(body)) + "\n\n" + body + "\n"
+					_, err := writer.WriteString(respContent)
 					if err != nil {
 						log.Println(err)
 					}
-					log.Println(count)
+					//log.Println(count)
 					writer.Flush()
 					//c.Close()
 				}

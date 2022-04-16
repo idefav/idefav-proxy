@@ -15,6 +15,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"time"
 )
 
@@ -51,6 +52,12 @@ var httpMux *http.ServeMux
 func init() {
 
 	httpMux = http.NewServeMux()
+	httpMux.HandleFunc("/debug/pprof/", pprof.Index)
+	httpMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	httpMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	httpMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	httpMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
 	httpMux.HandleFunc("/version", func(rw http.ResponseWriter, r *http.Request) {
 		//log.Println(version)
 		rw.Write([]byte(Version + "\n"))

@@ -65,10 +65,10 @@ func (inProxyServer InProxyServer) HttpProc(conn net.Conn, reader *bufio.Reader)
 			break
 		}
 		split := strings.Split(text, HEADER_SPLIT)
-		headers[split[0]] = split[1]
+		headers[strings.ToLower(split[0])] = split[1]
 	}
 
-	connection := headers["Connection"]
+	connection := headers[strings.ToLower("Connection")]
 
 	//log.Println(headers)
 	//log.Println("链接目标服务")
@@ -95,7 +95,7 @@ func (inProxyServer InProxyServer) HttpProc(conn net.Conn, reader *bufio.Reader)
 		headerStr += fmt.Sprintf("%s: %s", k, v) + CRLF
 	}
 	//log.Println("写入目标连接")
-	contentLengthStr := headers["Content-Length"]
+	contentLengthStr := headers[strings.ToLower("Content-Length")]
 	//destConn.Write(bytes[:n])
 	//n, _ := reader.Read(bytes)
 	//var bytes = make([]byte, 1024)
@@ -106,18 +106,16 @@ func (inProxyServer InProxyServer) HttpProc(conn net.Conn, reader *bufio.Reader)
 	}
 	destConn.Write([]byte(CRLF))
 	if contentLength > 0 {
-		go func() {
-			var bytes = make([]byte, contentLength)
-			//log.Println("开始读取body")
-			n, _ := reader.Read(bytes)
-			//log.Println("length:", n)
-			destConn.Write(bytes[:n])
-			//destConn.Write([]byte(CRLF))
-			//io.Copy(destConn, c)
-		}()
+		var bytes = make([]byte, contentLength)
+		//log.Println("开始读取body")
+		n, _ := reader.Read(bytes)
+		//log.Println("length:", n)
+		destConn.Write(bytes[:n])
+		//destConn.Write([]byte(CRLF))
+		//io.Copy(destConn, c)
 	}
 	//destConn.Write([]byte(CRLF))
-	go func() {
+	func() {
 		//log.Println("开始响应")
 		//respReader := destConn0.R
 		respReader := bufio.NewReader(destConn)
