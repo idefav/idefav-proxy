@@ -41,7 +41,7 @@ func Ready() {
 	if err := Upgrade.Ready(); err != nil {
 		panic(err)
 	}
-	log.Println("server is ready!")
+	log.Println("pserver is ready!")
 }
 
 func Stop(shutDownHook func()) {

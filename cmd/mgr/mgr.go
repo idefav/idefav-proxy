@@ -35,7 +35,7 @@ func (m *ManagementServer) Startup() error {
 	go func() {
 		err = m.Server.Serve(ln)
 		if err != http.ErrServerClosed {
-			log.Println("HTTP server:", err)
+			log.Println("HTTP pserver:", err)
 		}
 	}()
 

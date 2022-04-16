@@ -72,7 +72,7 @@ func (validator *Validator) Run() error {
 		<-c.Config.ServerReadyBarrier
 		for {
 			_ = c.Run()
-			// Avoid spamming the request to the validation server.
+			// Avoid spamming the request to the validation pserver.
 			// Since the TIMEWAIT socket is cleaned up in 60 second,
 			// it's maintaining 60 TIMEWAIT sockets. Not big deal.
 			time.Sleep(time.Second)

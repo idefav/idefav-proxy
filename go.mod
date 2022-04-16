@@ -13,6 +13,7 @@ require (
 	github.com/go-logr/logr v1.2.3
 	github.com/miekg/dns v1.1.48
 	github.com/natefinch/lumberjack v2.0.0+incompatible
+	github.com/soheilhy/cmux v0.1.5
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.10.1
 	github.com/vishvananda/netlink v1.1.1-0.20210330154013-f5de75959ad5

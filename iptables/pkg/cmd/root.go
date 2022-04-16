@@ -445,7 +445,7 @@ func bindCmdlineFlags(rootCmd *cobra.Command) {
 	rootCmd.Flags().Bool(constants.DropInvalid, InvalidDropByIptables.Get(), "Enable invalid drop in the iptables rules")
 
 	rootCmd.Flags().Bool(constants.CaptureAllDNS, false,
-		"Instead of only capturing DNS traffic to DNS server IP, capture all DNS traffic at port 53. This setting is only effective when redirect dns is enabled.")
+		"Instead of only capturing DNS traffic to DNS pserver IP, capture all DNS traffic at port 53. This setting is only effective when redirect dns is enabled.")
 
 	rootCmd.Flags().String(constants.OutputPath, "", "A file path to write the applied iptables rules to.")
 

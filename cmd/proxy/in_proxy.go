@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"idefav-proxy/cmd/mgr"
-	idefavHttp "idefav-proxy/cmd/proxy/http"
 	"idefav-proxy/cmd/server"
 	"idefav-proxy/cmd/upgrade"
 	"log"
@@ -15,14 +14,6 @@ import (
 	"time"
 )
 
-type InProxyServer struct {
-	Connections map[string]net.Conn
-	numOpen     int32
-}
-
-func NewInProxyServer() *InProxyServer {
-	return &InProxyServer{Connections: make(map[string]net.Conn), numOpen: 0}
-}
 func generateKey(localAddr, remoteAddr string) string {
 	return fmt.Sprintf("%s-%s", localAddr, remoteAddr)
 }
@@ -41,48 +32,65 @@ func (inProxyServer InProxyServer) Startup() error {
 		return err
 	}
 
+	go func() {
+		for {
+			var conn = <-ConnC
+			log.Println("Conn Close:", conn)
+			conn.Close()
+		}
+	}()
+
 	go inProxyServer.proc(ln)
+
 	return nil
 }
 
 func (inProxyServer InProxyServer) Shutdown() error {
-	for inProxyServer.numOpen > 0 {
+	for inProxyServer.NumOpen > 0 {
 		time.Sleep(time.Second)
 		continue
 	}
 	return nil
 }
 
-func (inProxyServer *InProxyServer) proc(ln net.Listener) error {
+var ConnC chan net.Conn
+
+func (inProxyServer InProxyServer) proc(ln net.Listener) error {
 	for {
 		conn, _ := ln.Accept()
+
+		//log.Println("接收到新Http请求", err2)
 		go func() {
 			defer conn.Close()
-			atomic.AddInt32(&inProxyServer.numOpen, 1)
-			defer atomic.AddInt32(&inProxyServer.numOpen, -1)
+			atomic.AddInt32(&inProxyServer.NumOpen, 1)
+			defer atomic.AddInt32(&inProxyServer.NumOpen, -1)
 
-			reader := bufio.NewReader(conn)
-			proto, _, err := reader.ReadLine()
-			if err != nil {
-				log.Println(err)
-				return
-			}
-			//request, err := http.ReadRequest(reader)
-
-			var header = string(proto)
-
-			if strings.Contains(header, "HTTP") {
-				idefavHttp.Resolve(conn, header, reader)
-			} else {
-				var body = "收到!" + mgr.Version + "\n"
-				var respContent = "HTTP/1.1 200 OK\nServer: idefav\nContent-Type: text/html;charset=UTF-8\nContent-Length: " + strconv.Itoa(len(body)) + "\n\n" + body + "\n"
-				writer := bufio.NewWriterSize(conn, len(respContent))
-				count, err := writer.WriteString(respContent)
+			for {
+				//log.Println("准备读取")
+				conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+				reader := bufio.NewReader(conn)
+				peek, err := reader.Peek(4)
 				if err != nil {
-					log.Println(err)
+					//log.Println("连接断开")
+					return
 				}
-				log.Println(count)
-				writer.Flush()
+				header := string(peek)
+
+				if strings.HasPrefix(header, "GET") || strings.HasPrefix(header, "POST") {
+					//log.Println("开始Http协议解析")
+					inProxyServer.HttpProc(conn, reader)
+				} else {
+					writer := bufio.NewWriter(conn)
+					var body = "收到!" + mgr.Version + "\n"
+					var respContent = "HTTP/1.1 200 OK\nServer: idefav\nContent-Type: text/html;charset=UTF-8\nContent-Length: " + strconv.Itoa(len(body)) + "\n\n" + body + "\n"
+					count, err := writer.WriteString(respContent)
+					if err != nil {
+						log.Println(err)
+					}
+					log.Println(count)
+					writer.Flush()
+					//c.Close()
+				}
 			}
 
 		}()
@@ -90,7 +98,8 @@ func (inProxyServer *InProxyServer) proc(ln net.Listener) error {
 	}
 }
 
+var Server = NewInProxyServer()
+
 func init() {
-	proxyServer := NewInProxyServer()
-	server.RegisterServer(proxyServer)
+	server.RegisterServer(Server)
 }

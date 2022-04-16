@@ -383,13 +383,13 @@ func (cfg *IptablesConfigurator) Run() {
 
 	for _, uid := range split(cfg.cfg.ProxyUID) {
 		// Redirect app calls back to itself via Envoy when using the service VIP
-		// e.g. appN => Envoy (client) => Envoy (server) => appN.
+		// e.g. appN => Envoy (client) => Envoy (pserver) => appN.
 		// nolint: lll
 		if redirectDNS {
 			// When DNS is enabled, we skip this for port 53. This ensures we do not have:
-			// app => istio-agent => Envoy inbound => dns server
+			// app => istio-agent => Envoy inbound => dns pserver
 			// Instead, we just have:
-			// app => istio-agent => dns server
+			// app => istio-agent => dns pserver
 			cfg.iptables.AppendVersionedRule("127.0.0.1/32", "::1/128", iptableslog.UndefinedCommand, constants.ISTIOOUTPUT, constants.NAT,
 				"-o", "lo", "!", "-d", constants.IPVersionSpecific,
 				"-p", "tcp", "!", "--dport", "53",
@@ -405,8 +405,8 @@ func (cfg *IptablesConfigurator) Run() {
 		// If loopback explicitly set via OutboundIPRangesInclude, then don't return.
 		if !ipv4RangesInclude.HasLoopBackIP && !ipv6RangesInclude.HasLoopBackIP {
 			if redirectDNS {
-				// Users may have a DNS server that is on localhost. In these cases, applications may
-				// send TCP traffic to the DNS server that we actually *do* want to intercept. To
+				// Users may have a DNS pserver that is on localhost. In these cases, applications may
+				// send TCP traffic to the DNS pserver that we actually *do* want to intercept. To
 				// handle this case, we exclude port 53 from this rule. Note: We cannot just move the
 				// port 53 redirection rule further up the list, as we will want to avoid capturing
 				// DNS requests from the proxy UID/GID
@@ -427,7 +427,7 @@ func (cfg *IptablesConfigurator) Run() {
 
 	for _, gid := range split(cfg.cfg.ProxyGID) {
 		// Redirect app calls back to itself via Envoy when using the service VIP
-		// e.g. appN => Envoy (client) => Envoy (server) => appN.
+		// e.g. appN => Envoy (client) => Envoy (pserver) => appN.
 		cfg.iptables.AppendVersionedRule("127.0.0.1/32", "::1/128", iptableslog.UndefinedCommand, constants.ISTIOOUTPUT, constants.NAT,
 			"-o", "lo", "!", "-d", constants.IPVersionSpecific,
 			"-m", "owner", "--gid-owner", gid, "-j", constants.ISTIOINREDIRECT)
@@ -437,8 +437,8 @@ func (cfg *IptablesConfigurator) Run() {
 		// If loopback explicitly set via OutboundIPRangesInclude, then don't return.
 		if !ipv4RangesInclude.HasLoopBackIP && !ipv6RangesInclude.HasLoopBackIP {
 			if redirectDNS {
-				// Users may have a DNS server that is on localhost. In these cases, applications may
-				// send TCP traffic to the DNS server that we actually *do* want to intercept. To
+				// Users may have a DNS pserver that is on localhost. In these cases, applications may
+				// send TCP traffic to the DNS pserver that we actually *do* want to intercept. To
 				// handle this case, we exclude port 53 from this rule. Note: We cannot just move the
 				// port 53 redirection rule further up the list, as we will want to avoid capturing
 				// DNS requests from the proxy UID/GID
@@ -464,7 +464,7 @@ func (cfg *IptablesConfigurator) Run() {
 	if redirectDNS {
 		if cfg.cfg.CaptureAllDNS {
 			// Redirect all TCP dns traffic on port 53 to the agent on port 15053
-			// This will be useful for the CNI case where pod DNS server address cannot be decided.
+			// This will be useful for the CNI case where pod DNS pserver address cannot be decided.
 			cfg.iptables.AppendRule(iptableslog.UndefinedCommand,
 				constants.ISTIOOUTPUT, constants.NAT,
 				"-p", constants.TCP,
@@ -476,10 +476,10 @@ func (cfg *IptablesConfigurator) Run() {
 				// redirect all TCP dns traffic on port 53 to the agent on port 15053 for all servers
 				// in etc/resolv.conf
 				// We avoid redirecting all IP ranges to avoid infinite loops when there are local DNS proxies
-				// such as: app -> istio dns server -> dnsmasq -> upstream
-				// This ensures that we do not get requests from dnsmasq sent back to the agent dns server in a loop.
-				// Note: If a user somehow configured etc/resolv.conf to point to dnsmasq and server X, and dnsmasq also
-				// pointed to server X, this would not work. However, the assumption is that is not a common case.
+				// such as: app -> istio dns pserver -> dnsmasq -> upstream
+				// This ensures that we do not get requests from dnsmasq sent back to the agent dns pserver in a loop.
+				// Note: If a user somehow configured etc/resolv.conf to point to dnsmasq and pserver X, and dnsmasq also
+				// pointed to pserver X, this would not work. However, the assumption is that is not a common case.
 				cfg.iptables.AppendRuleV4(iptableslog.UndefinedCommand,
 					constants.ISTIOOUTPUT, constants.NAT,
 					"-p", constants.TCP,
@@ -647,16 +647,16 @@ func HandleDNSUDP(
 
 	if captureAllDNS {
 		// Redirect all TCP dns traffic on port 53 to the agent on port 15053
-		// This will be useful for the CNI case where pod DNS server address cannot be decided.
+		// This will be useful for the CNI case where pod DNS pserver address cannot be decided.
 		f.Run("-p", "udp", "--dport", "53", "-j", constants.REDIRECT, "--to-port", constants.IstioAgentDNSListenerPort)
 	} else {
 		// redirect all TCP dns traffic on port 53 to the agent on port 15053 for all servers
 		// in etc/resolv.conf
 		// We avoid redirecting all IP ranges to avoid infinite loops when there are local DNS proxies
-		// such as: app -> istio dns server -> dnsmasq -> upstream
-		// This ensures that we do not get requests from dnsmasq sent back to the agent dns server in a loop.
-		// Note: If a user somehow configured etc/resolv.conf to point to dnsmasq and server X, and dnsmasq also
-		// pointed to server X, this would not work. However, the assumption is that is not a common case.
+		// such as: app -> istio dns pserver -> dnsmasq -> upstream
+		// This ensures that we do not get requests from dnsmasq sent back to the agent dns pserver in a loop.
+		// Note: If a user somehow configured etc/resolv.conf to point to dnsmasq and pserver X, and dnsmasq also
+		// pointed to pserver X, this would not work. However, the assumption is that is not a common case.
 		for _, s := range dnsServersV4 {
 			f.RunV4("-p", "udp", "--dport", "53", "-d", s+"/32",
 				"-j", constants.REDIRECT, "--to-port", constants.IstioAgentDNSListenerPort)
@@ -692,7 +692,7 @@ func addConntrackZoneDNSUDP(
 	}
 
 	if captureAllDNS {
-		// Not specifying destination address is useful for the CNI case where pod DNS server address cannot be decided.
+		// Not specifying destination address is useful for the CNI case where pod DNS pserver address cannot be decided.
 
 		// Mark all UDP dns traffic with dst port 53 as zone 2. These are application client packets towards DNS resolvers.
 		f.Run("-p", "udp", "--dport", "53",

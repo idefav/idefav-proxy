@@ -28,7 +28,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// An udsCore write entries to an UDS server with HTTP Post. Log messages will be encoded into a JSON array.
+// An udsCore write entries to an UDS pserver with HTTP Post. Log messages will be encoded into a JSON array.
 type udsCore struct {
 	client       http.Client
 	minimumLevel zapcore.Level
@@ -38,7 +38,7 @@ type udsCore struct {
 	mu           sync.Mutex
 }
 
-// teeToUDSServer returns a zapcore.Core that writes entries to both the provided core and to an uds server.
+// teeToUDSServer returns a zapcore.Core that writes entries to both the provided core and to an uds pserver.
 func teeToUDSServer(baseCore zapcore.Core, address, path string) zapcore.Core {
 	c := http.Client{
 		Transport: &http.Transport{
@@ -93,16 +93,16 @@ func (u *udsCore) Sync() error {
 	}
 	resp, err := u.client.Post(u.url, "application/json", bytes.NewReader(msg))
 	if err != nil {
-		return fmt.Errorf("failed to send logs to uds server %v: %v", u.url, err)
+		return fmt.Errorf("failed to send logs to uds pserver %v: %v", u.url, err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("uds server returns non-ok status %v: %v", u.url, resp.Status)
+		return fmt.Errorf("uds pserver returns non-ok status %v: %v", u.url, resp.Status)
 	}
 	return nil
 }
 
 // Write implements zapcore.Core. Log messages will be temporarily buffered and sent to
-// UDS server asyncrhonously.
+// UDS pserver asyncrhonously.
 func (u *udsCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
 	buffer, err := u.enc.EncodeEntry(entry, fields)
 	if err != nil {

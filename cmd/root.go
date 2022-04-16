@@ -14,6 +14,7 @@ var RootCmd = &cobra.Command{
 	Short: "idefav proxy是一个代理服务",
 	Long:  `Idefav Proxy 是一个高性能代理服务`,
 	Run: func(cmd *cobra.Command, args []string) {
+
 		err := server.IdefavServerManager.Startup()
 		if err != nil {
 			log.Fatal(err)

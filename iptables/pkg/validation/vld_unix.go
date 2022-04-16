@@ -93,7 +93,7 @@ func GetOriginalDestination(conn net.Conn) (daddr net.IP, dport uint16, err erro
 	return
 }
 
-// Setup reuse address to run the validation server more robustly
+// Setup reuse address to run the validation pserver more robustly
 func reuseAddr(network, address string, conn syscall.RawConn) error {
 	return conn.Control(func(descriptor uintptr) {
 		err := unix.SetsockoptInt(int(descriptor), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)

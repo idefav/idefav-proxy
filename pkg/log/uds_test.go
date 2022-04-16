@@ -68,7 +68,7 @@ func TestUDSLog(t *testing.T) {
 	Warn("test2")
 	Sync()
 
-	// There should be two messages received at server
+	// There should be two messages received at pserver
 	// {"msg":"test","k":"v"}
 	// {"msg":"test2"}
 	if got, want := len(srv.messages), 2; got != want {
