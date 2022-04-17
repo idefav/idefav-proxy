@@ -11,6 +11,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.1.2
 	github.com/florianl/go-nflog/v2 v2.0.1
 	github.com/go-logr/logr v1.2.3
+	github.com/google/martian v2.1.0+incompatible
 	github.com/miekg/dns v1.1.48
 	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/spf13/pflag v1.0.5

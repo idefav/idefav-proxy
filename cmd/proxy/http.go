@@ -51,7 +51,7 @@ func Get(addr string) net.Conn {
 	return destConnPool.conns[key]
 }
 
-func (inProxyServer InProxyServer) HttpProc(conn net.Conn, reader *bufio.Reader) error {
+func (inProxyServer InProxyServer) HttpProc(conn net.Conn, reader *bufio.Reader, dst_host string) error {
 
 	var requestLine = ""
 	var headers = make(map[string]string)
@@ -73,7 +73,7 @@ func (inProxyServer InProxyServer) HttpProc(conn net.Conn, reader *bufio.Reader)
 	//log.Println(headers)
 	//log.Println("链接目标服务")
 
-	destConn, err0 := net.Dial("tcp", "192.168.0.105:28080")
+	destConn, err0 := net.Dial("tcp", dst_host)
 	//destConn := Get("192.168.0.105:28080")
 	//destConn0, err0 := inProxyServer.ConnPool.Get()
 

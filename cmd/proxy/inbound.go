@@ -6,6 +6,7 @@ import (
 	"idefav-proxy/cmd/mgr"
 	"idefav-proxy/cmd/server"
 	"idefav-proxy/cmd/upgrade"
+	"idefav-proxy/pkg/socket"
 	"log"
 	"net"
 	"strconv"
@@ -64,6 +65,15 @@ func (inProxyServer InProxyServer) proc(ln net.Listener) error {
 			defer conn.Close()
 			atomic.AddInt32(&inProxyServer.NumOpen, 1)
 			defer atomic.AddInt32(&inProxyServer.NumOpen, -1)
+			log.Printf("removeAddr: %s --> localAddr: %s", conn.RemoteAddr(), conn.LocalAddr())
+			log.Println("conn:", &conn)
+
+			var dst_host = "192.168.0.105:28080"
+			dst, host, tcpConn, err := socket.GetOriginalDst(conn.(*net.TCPConn))
+			log.Println(dst, host, tcpConn, err)
+			if err == nil {
+				dst_host = host
+			}
 
 			for {
 				//log.Println("准备读取")
@@ -78,7 +88,7 @@ func (inProxyServer InProxyServer) proc(ln net.Listener) error {
 
 				if strings.HasPrefix(header, "GET") || strings.HasPrefix(header, "POST") {
 					//log.Println("开始Http协议解析")
-					inProxyServer.HttpProc(conn, reader)
+					inProxyServer.HttpProc(conn, reader, dst_host)
 				} else {
 					log.Println(header)
 					writer := bufio.NewWriter(conn)
