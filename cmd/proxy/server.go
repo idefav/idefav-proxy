@@ -1,9 +1,14 @@
 package proxy
 
 import (
+	"github.com/spf13/cobra"
+	"idefav-proxy/cmd/mgr"
 	"idefav-proxy/cmd/server"
+	"idefav-proxy/cmd/upgrade"
+	"idefav-proxy/pkg/log"
 	"idefav-proxy/pkg/pool"
 	"net"
+	"net/http"
 	"time"
 )
 
@@ -33,7 +38,31 @@ func NewOutboundServer() *OutboundServer {
 	return &OutboundServer{NumOpen: 0, IdleTimeOut: 60 * time.Second}
 }
 
-func init() {
-	server.RegisterServer(InboundProxyServer)
-	server.RegisterServer(OutboundProxyServer)
+var ProxyCmd = &cobra.Command{
+	Use:   "proxy",
+	Short: "proxy server",
+
+	Run: func(cmd *cobra.Command, args []string) {
+
+		iServer := http.Server{
+			Handler: mgr.HttpMux,
+		}
+		var idefavMgrServer = mgr.NewManagementServer(iServer)
+		idefavMgrServer.Addr = ":15030"
+		server.RegisterServer(idefavMgrServer)
+
+		server.RegisterServer(InboundProxyServer)
+		server.RegisterServer(OutboundProxyServer)
+
+		err := server.IdefavServerManager.Startup()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		upgrade.Ready()
+
+		upgrade.Stop(func() {
+			server.IdefavServerManager.Shutdown()
+		})
+	},
 }

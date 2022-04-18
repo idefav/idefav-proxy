@@ -2,6 +2,7 @@ package mgr
 
 import (
 	"fmt"
+	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
 	cleanCmd "idefav-proxy/clean-iptables/pkg/cmd"
 	cleanConfig "idefav-proxy/clean-iptables/pkg/config"
@@ -9,8 +10,10 @@ import (
 	"idefav-proxy/cmd/upgrade"
 	"idefav-proxy/iptables/pkg/capture"
 	"idefav-proxy/iptables/pkg/config"
+	"idefav-proxy/iptables/pkg/constants"
 	dep "idefav-proxy/iptables/pkg/dependencies"
 	"idefav-proxy/iptables/pkg/validation"
+	"idefav-proxy/pkg/env"
 	idefavLog "idefav-proxy/pkg/log"
 	"log"
 	"net"
@@ -21,14 +24,15 @@ import (
 
 type ManagementServer struct {
 	Server http.Server
+	Addr   string
 }
 
 func NewManagementServer(server http.Server) *ManagementServer {
-	return &ManagementServer{Server: server}
+	return &ManagementServer{Server: server, Addr: ":18080"}
 }
 
 func (m *ManagementServer) Startup() error {
-	ln, err := upgrade.Upgrade.Listen("tcp", ":18080")
+	ln, err := upgrade.Upgrade.Listen("tcp", m.Addr)
 	if err != nil {
 		return err
 	}
@@ -47,29 +51,29 @@ func (m *ManagementServer) Shutdown() error {
 	return m.Server.Shutdown(context.Background())
 }
 
-var httpMux *http.ServeMux
+var HttpMux *http.ServeMux
 
 func init() {
 
-	httpMux = http.NewServeMux()
-	httpMux.HandleFunc("/debug/pprof/", pprof.Index)
-	httpMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	httpMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	httpMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	httpMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	HttpMux = http.NewServeMux()
+	HttpMux.HandleFunc("/debug/pprof/", pprof.Index)
+	HttpMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	HttpMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	HttpMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	HttpMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
-	httpMux.HandleFunc("/version", func(rw http.ResponseWriter, r *http.Request) {
+	HttpMux.HandleFunc("/version", func(rw http.ResponseWriter, r *http.Request) {
 		//log.Println(version)
 		rw.Write([]byte(Version + "\n"))
 	})
 
-	httpMux.HandleFunc("/demo", func(rw http.ResponseWriter, r *http.Request) {
+	HttpMux.HandleFunc("/demo", func(rw http.ResponseWriter, r *http.Request) {
 		//log.Println(version)
 		time.Sleep(100)
 		rw.Write([]byte(Version + "\n"))
 	})
 
-	httpMux.HandleFunc("/upgrade", func(rw http.ResponseWriter, r *http.Request) {
+	HttpMux.HandleFunc("/upgrade", func(rw http.ResponseWriter, r *http.Request) {
 		log.Println("upgraded")
 		err := upgrade.Upgrade.Upgrade()
 		if err != nil {
@@ -81,7 +85,7 @@ func init() {
 
 	})
 
-	httpMux.HandleFunc("/download", func(writer http.ResponseWriter, request *http.Request) {
+	HttpMux.HandleFunc("/download", func(writer http.ResponseWriter, request *http.Request) {
 		request.ParseForm()
 		ver := request.Form.Get("ver")
 		err := Download("idefav-proxy", ver)
@@ -92,7 +96,7 @@ func init() {
 		writer.Write([]byte("更新成功"))
 	})
 
-	httpMux.HandleFunc("/clean-iptables", func(writer http.ResponseWriter, request *http.Request) {
+	HttpMux.HandleFunc("/clean-iptables", func(writer http.ResponseWriter, request *http.Request) {
 		cfg := &cleanConfig.Config{
 			DryRun:             false,
 			ProxyUID:           "",
@@ -114,7 +118,8 @@ func init() {
 		writer.Write([]byte("操作成功"))
 	})
 
-	httpMux.HandleFunc("/iptables", func(writer http.ResponseWriter, request *http.Request) {
+	HttpMux.HandleFunc("/iptables", func(writer http.ResponseWriter, request *http.Request) {
+		envoyUserVar := env.RegisterStringVar(constants.EnvoyUser, "idefav-proxy", "Envoy proxy username")
 		cfg := &config.Config{
 			DryRun:                  false,
 			TraceLogging:            false,
@@ -122,13 +127,13 @@ func init() {
 			ProxyPort:               "15001",
 			InboundCapturePort:      "15006",
 			InboundTunnelPort:       "15008",
-			ProxyUID:                "",
-			ProxyGID:                "",
+			ProxyUID:                envoyUserVar.Get(),
+			ProxyGID:                envoyUserVar.Get(),
 			InboundInterceptionMode: "",
 			InboundTProxyMark:       "1337",
 			InboundTProxyRouteTable: "133",
 			InboundPortsInclude:     "*",
-			InboundPortsExclude:     "18080,22",
+			InboundPortsExclude:     "18080,22,15030",
 			OwnerGroupsInclude:      "*",
 			OwnerGroupsExclude:      "",
 			OutboundPortsInclude:    "",
@@ -187,11 +192,30 @@ func init() {
 		writer.Write([]byte("操作成功"))
 	})
 
-	iServer := http.Server{
-		Handler: httpMux,
-	}
-	var idefavMgrServer = NewManagementServer(iServer)
-	server.RegisterServer(idefavMgrServer)
+}
+
+var ManagerCmd = &cobra.Command{
+	Use:   "mgr",
+	Short: "Manage Proxy Server",
+
+	Run: func(cmd *cobra.Command, args []string) {
+		iServer := http.Server{
+			Handler: HttpMux,
+		}
+		var idefavMgrServer = NewManagementServer(iServer)
+		server.RegisterServer(idefavMgrServer)
+
+		err := server.IdefavServerManager.Startup()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		upgrade.Ready()
+
+		upgrade.Stop(func() {
+			server.IdefavServerManager.Shutdown()
+		})
+	},
 }
 
 func getLocalIP() (net.IP, error) {

@@ -41,7 +41,7 @@ func Ready() {
 	if err := Upgrade.Ready(); err != nil {
 		panic(err)
 	}
-	log.Println("pserver is ready!")
+	log.Println("idefav proxy is ready!")
 }
 
 func Stop(shutDownHook func()) {
