@@ -30,7 +30,7 @@ func (o *OutboundServer) proc(ln net.Listener) error {
 			defer conn.Close()
 			atomic.AddInt32(&o.NumOpen, 1)
 			defer atomic.AddInt32(&o.NumOpen, -1)
-			log.Printf("removeAddr: %s --> localAddr: %s", conn.RemoteAddr(), conn.LocalAddr())
+			log.Printf("remoteAddr: %s --> localAddr: %s", conn.RemoteAddr(), conn.LocalAddr())
 			log.Println("conn:", &conn)
 
 			var dst_host = ""
