@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"bufio"
-	"fmt"
 	"idefav-proxy/cmd/upgrade"
 	"idefav-proxy/pkg/socket"
 	"io"
@@ -13,55 +12,30 @@ import (
 	"time"
 )
 
-func generateKey(localAddr, remoteAddr string) string {
-	return fmt.Sprintf("%s-%s", localAddr, remoteAddr)
-}
-
-func (inProxyServer *InProxyServer) AddConn(conn net.Conn) error {
-	return nil
-}
-
-func (inProxyServer *InProxyServer) RemoveConn(conn net.Conn) error {
-	return nil
-}
-
-func (inProxyServer *InProxyServer) Startup() error {
-	ln, err := upgrade.Upgrade.Listen("tcp", ":15006")
+func (o *OutboundServer) Startup() error {
+	ln, err := upgrade.Upgrade.Listen("tcp", ":15001")
 	if err != nil {
 		return err
 	}
-
-	go inProxyServer.proc(ln)
-
+	go o.proc(ln)
 	return nil
 }
 
-func (inProxyServer *InProxyServer) Shutdown() error {
-	for inProxyServer.NumOpen > 0 {
-		time.Sleep(time.Second)
-		continue
-	}
-	return nil
-}
-
-var ConnC chan net.Conn
-
-func (inProxyServer *InProxyServer) proc(ln net.Listener) error {
+func (o *OutboundServer) proc(ln net.Listener) error {
 	for {
 		conn, _ := ln.Accept()
 
 		//log.Println("接收到新Http请求", err2)
 		go func() {
 			defer conn.Close()
-			atomic.AddInt32(&inProxyServer.NumOpen, 1)
-			defer atomic.AddInt32(&inProxyServer.NumOpen, -1)
-			log.Println("numOpen:", inProxyServer.NumOpen)
+			atomic.AddInt32(&o.NumOpen, 1)
+			defer atomic.AddInt32(&o.NumOpen, -1)
 			log.Printf("removeAddr: %s --> localAddr: %s", conn.RemoteAddr(), conn.LocalAddr())
 			log.Println("conn:", &conn)
 
 			var dst_host = ""
-			_, host, _, err := socket.GetOriginalDst(conn.(*net.TCPConn))
-			//log.Println(dst, host, tcpConn, err)
+			dst, host, tcpConn, err := socket.GetOriginalDst(conn.(*net.TCPConn))
+			log.Println(dst, host, tcpConn, err)
 			if err == nil {
 				dst_host = host
 			}
@@ -85,7 +59,7 @@ func (inProxyServer *InProxyServer) proc(ln net.Listener) error {
 					if dst_host == "" {
 						dst_host = "192.168.0.105:28080"
 					}
-					inProxyServer.HttpProc(conn, reader, dst_host)
+					o.HttpProc(conn, reader, dst_host)
 				} else {
 					//log.Println(header)
 					//writer := bufio.NewWriter(conn)
@@ -132,4 +106,12 @@ func (inProxyServer *InProxyServer) proc(ln net.Listener) error {
 	}
 }
 
-var InboundProxyServer = NewInProxyServer()
+func (o *OutboundServer) Shutdown() error {
+	for o.NumOpen > 0 {
+		time.Sleep(time.Second)
+		continue
+	}
+	return nil
+}
+
+var OutboundProxyServer = NewOutboundServer()

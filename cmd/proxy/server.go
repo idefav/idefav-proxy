@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"idefav-proxy/cmd/server"
 	"idefav-proxy/pkg/pool"
 	"net"
 	"time"
@@ -18,7 +19,21 @@ func NewInProxyServer() *InProxyServer {
 	return &InProxyServer{
 		Connections: make(map[string]net.Conn),
 		NumOpen:     0,
-		IdleTimeOut: 60 * 1000,
+		IdleTimeOut: 60 * time.Second,
 		ConnPool:    connPool,
 	}
+}
+
+type OutboundServer struct {
+	NumOpen     int32
+	IdleTimeOut time.Duration
+}
+
+func NewOutboundServer() *OutboundServer {
+	return &OutboundServer{NumOpen: 0, IdleTimeOut: 60 * time.Second}
+}
+
+func init() {
+	server.RegisterServer(InboundProxyServer)
+	server.RegisterServer(OutboundProxyServer)
 }
