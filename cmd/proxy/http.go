@@ -169,7 +169,6 @@ func (inProxyServer *InProxyServer) HttpProc(conn net.Conn, reader *bufio.Reader
 		}
 
 		for chunked {
-			log.Println("读取chunked 数据")
 			line, _, err := respReader.ReadLine()
 			if err != nil {
 				log.Println(err)
@@ -189,11 +188,9 @@ func (inProxyServer *InProxyServer) HttpProc(conn net.Conn, reader *bufio.Reader
 			}
 			chunkSize := int(chunkSize64)
 			if chunkSize == 0 {
-				log.Println("chunk data 读取完毕")
 				conn.Write([]byte(CRLF))
 				return
 			}
-			log.Println("读取chunk data")
 
 			var sumReadLen = 0
 			for {
@@ -290,7 +287,6 @@ func (o *OutboundServer) HttpProc(conn net.Conn, reader *bufio.Reader, dst_host 
 		log.Println(err3)
 	}
 	if contentLength > 0 {
-		log.Println("读取body")
 		var sumReadLen = 0
 		for {
 			var bytes = make([]byte, 1024)
@@ -353,7 +349,6 @@ func (o *OutboundServer) HttpProc(conn net.Conn, reader *bufio.Reader, dst_host 
 		}
 
 		for chunked {
-			log.Println("读取chunked 数据")
 			line, _, err := respReader.ReadLine()
 			if err != nil {
 				log.Println(err)
@@ -375,10 +370,8 @@ func (o *OutboundServer) HttpProc(conn net.Conn, reader *bufio.Reader, dst_host 
 			if chunkSize == 0 {
 				lastLine, _, _ := respReader.ReadLine()
 				conn.Write([]byte(string(lastLine) + CRLF))
-				log.Println("chunk data 读取完毕")
 				return
 			}
-			log.Println("读取chunk data")
 
 			var sumReadLen = 0
 			for {
@@ -398,7 +391,6 @@ func (o *OutboundServer) HttpProc(conn net.Conn, reader *bufio.Reader, dst_host 
 		}
 
 		if respContentLength > 0 {
-			log.Println("读取body")
 			var sumReadLen = 0
 			for {
 				var bytes = make([]byte, 1024)
@@ -412,7 +404,6 @@ func (o *OutboundServer) HttpProc(conn net.Conn, reader *bufio.Reader, dst_host 
 
 		}
 		conn.Write([]byte(CRLF))
-		log.Println("处理完毕")
 		if strings.ToLower(responseConnValue) == "close" {
 			log.Println("链接关闭")
 			conn.Close()
