@@ -3,6 +3,7 @@ package proxy
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -99,20 +100,22 @@ func (inProxyServer *InProxyServer) HttpProc(conn net.Conn, reader *bufio.Reader
 	//destConn.Write(bytes[:n])
 	//n, _ := reader.Read(bytes)
 	//var bytes = make([]byte, 1024)
-	_, err2 := destConn.Write([]byte(headerStr))
+	_, err2 := destConn.Write([]byte(headerStr + CRLF))
 	contentLength, err3 := strconv.Atoi(contentLengthStr)
 	if err3 != nil {
 		contentLength = 0
 	}
-	destConn.Write([]byte(CRLF))
 	if contentLength > 0 {
-		var bytes = make([]byte, contentLength)
-		//log.Println("开始读取body")
-		n, _ := reader.Read(bytes)
-		//log.Println("length:", n)
-		destConn.Write(bytes[:n])
-		//destConn.Write([]byte(CRLF))
-		//io.Copy(destConn, c)
+		var sumReadLen = 0
+		for {
+			var bytes = make([]byte, 1024)
+			n, _ := reader.Read(bytes)
+			sumReadLen += n
+			destConn.Write(bytes[:n])
+			if sumReadLen >= contentLength {
+				break
+			}
+		}
 	}
 	//destConn.Write([]byte(CRLF))
 	func() {
@@ -123,12 +126,20 @@ func (inProxyServer *InProxyServer) HttpProc(conn net.Conn, reader *bufio.Reader
 		conn.Write([]byte(string(line) + CRLF))
 		conn.Write([]byte("Server: idefav-proxy" + CRLF))
 
+		var chunked = false
 		var responseConnValue = ""
 		respContentLength := 0
 		for {
 			headerBytes, _, _ := respReader.ReadLine()
 			header := string(headerBytes)
 			//log.Println(header)
+			if strings.Contains(header, "Transfer-Encoding") {
+				split := strings.Split(header, HEADER_SPLIT)
+				chunkedStr := split[1]
+				chunked = strings.ToLower(chunkedStr) == "chunked"
+				conn.Write([]byte(header + CRLF))
+				continue
+			}
 			if header == "" {
 				conn.Write([]byte(CRLF))
 				break
@@ -157,10 +168,62 @@ func (inProxyServer *InProxyServer) HttpProc(conn net.Conn, reader *bufio.Reader
 			conn.Write([]byte(header + CRLF))
 		}
 
+		for chunked {
+			log.Println("读取chunked 数据")
+			line, _, err := respReader.ReadLine()
+			if err != nil {
+				log.Println(err)
+				return
+			}
+
+			lineText := string(line)
+			conn.Write([]byte(lineText + CRLF))
+			if lineText == "" {
+				continue
+			}
+
+			chunkSize64, err := strconv.ParseInt(lineText, 16, 32)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			chunkSize := int(chunkSize64)
+			if chunkSize == 0 {
+				log.Println("chunk data 读取完毕")
+				conn.Write([]byte(CRLF))
+				return
+			}
+			log.Println("读取chunk data")
+
+			var sumReadLen = 0
+			for {
+				var tmpSize = 1024
+				if chunkSize < 1024 {
+					tmpSize = chunkSize
+				}
+				var bytes = make([]byte, tmpSize)
+				l, _ := respReader.Read(bytes)
+				sumReadLen += l
+				conn.Write(bytes[:l])
+				if sumReadLen >= chunkSize {
+					//conn.Write([]byte(CRLF))
+					break
+				}
+			}
+
+		}
+
 		if respContentLength > 0 {
-			var bytes = make([]byte, respContentLength)
-			readLen, _ := respReader.Read(bytes)
-			conn.Write(bytes[:readLen])
+			var sumReadLen = 0
+			for {
+				var bytes = make([]byte, 1024)
+				l, _ := respReader.Read(bytes)
+				sumReadLen += l
+				conn.Write(bytes[:l])
+				if sumReadLen >= respContentLength {
+					break
+				}
+			}
 		}
 		conn.Write([]byte(CRLF))
 
@@ -216,16 +279,29 @@ func (o *OutboundServer) HttpProc(conn net.Conn, reader *bufio.Reader, dst_host 
 		headerStr += fmt.Sprintf("%s: %s", k, v) + CRLF
 	}
 	contentLengthStr := headers[strings.ToLower("Content-Length")]
-	_, err2 := destConn.Write([]byte(headerStr))
+	_, err2 := destConn.Write([]byte(headerStr + CRLF))
+	log.Println(headerStr + CRLF)
+	if err2 != nil {
+		log.Println(err2)
+	}
 	contentLength, err3 := strconv.Atoi(contentLengthStr)
 	if err3 != nil {
 		contentLength = 0
+		log.Println(err3)
 	}
-	destConn.Write([]byte(CRLF))
 	if contentLength > 0 {
-		var bytes = make([]byte, contentLength)
-		n, _ := reader.Read(bytes)
-		destConn.Write(bytes[:n])
+		log.Println("读取body")
+		var sumReadLen = 0
+		for {
+			var bytes = make([]byte, 1024)
+			n, _ := reader.Read(bytes)
+			sumReadLen += n
+			destConn.Write(bytes[:n])
+			if sumReadLen >= contentLength {
+				break
+			}
+		}
+
 	}
 	func() {
 		respReader := bufio.NewReader(destConn)
@@ -234,10 +310,19 @@ func (o *OutboundServer) HttpProc(conn net.Conn, reader *bufio.Reader, dst_host 
 		conn.Write([]byte("Server: idefav-proxy" + CRLF))
 
 		var responseConnValue = ""
+		var chunked = false
 		respContentLength := 0
 		for {
 			headerBytes, _, _ := respReader.ReadLine()
 			header := string(headerBytes)
+			log.Println(header)
+			if strings.Contains(header, "Transfer-Encoding") {
+				split := strings.Split(header, HEADER_SPLIT)
+				chunkedStr := split[1]
+				chunked = strings.ToLower(chunkedStr) == "chunked"
+				conn.Write([]byte(header + CRLF))
+				continue
+			}
 			if header == "" {
 				conn.Write([]byte(CRLF))
 				break
@@ -246,11 +331,11 @@ func (o *OutboundServer) HttpProc(conn net.Conn, reader *bufio.Reader, dst_host 
 				split := strings.Split(header, HEADER_SPLIT)
 				v := split[1]
 				responseConnValue = v
-				conn.Write([]byte("Connection: keep-alive" + CRLF))
+				//conn.Write([]byte("Connection: keep-alive" + CRLF))
 				continue
 			}
 			if strings.HasPrefix(header, "Keep-Alive") {
-				conn.Write([]byte("Keep-Alive: timeout=60" + CRLF))
+				//conn.Write([]byte("Keep-Alive: timeout=60" + CRLF))
 				continue
 			}
 			if strings.HasPrefix(header, "Content-Length") {
@@ -263,20 +348,78 @@ func (o *OutboundServer) HttpProc(conn net.Conn, reader *bufio.Reader, dst_host 
 					respContentLength = respContentLen
 				}
 			}
+
 			conn.Write([]byte(header + CRLF))
 		}
 
+		for chunked {
+			log.Println("读取chunked 数据")
+			line, _, err := respReader.ReadLine()
+			if err != nil {
+				log.Println(err)
+				return
+			}
+
+			lineText := string(line)
+			conn.Write([]byte(lineText + CRLF))
+			if lineText == "" {
+				continue
+			}
+
+			chunkSize64, err := strconv.ParseInt(lineText, 16, 32)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			chunkSize := int(chunkSize64)
+			if chunkSize == 0 {
+				lastLine, _, _ := respReader.ReadLine()
+				conn.Write([]byte(string(lastLine) + CRLF))
+				log.Println("chunk data 读取完毕")
+				return
+			}
+			log.Println("读取chunk data")
+
+			var sumReadLen = 0
+			for {
+				var tmpSize = 1024
+				if chunkSize < 1024 {
+					tmpSize = chunkSize
+				}
+				var bytes = make([]byte, tmpSize)
+				l, _ := respReader.Read(bytes)
+				sumReadLen += l
+				conn.Write(bytes[:l])
+				if sumReadLen >= chunkSize {
+					break
+				}
+			}
+
+		}
+
 		if respContentLength > 0 {
-			var bytes = make([]byte, respContentLength)
-			readLen, _ := respReader.Read(bytes)
-			conn.Write(bytes[:readLen])
+			log.Println("读取body")
+			var sumReadLen = 0
+			for {
+				var bytes = make([]byte, 1024)
+				l, _ := respReader.Read(bytes)
+				sumReadLen += l
+				conn.Write(bytes[:l])
+				if sumReadLen >= respContentLength {
+					break
+				}
+			}
+
 		}
 		conn.Write([]byte(CRLF))
+		log.Println("处理完毕")
 		if strings.ToLower(responseConnValue) == "close" {
+			log.Println("链接关闭")
 			conn.Close()
 		}
 
 		if strings.ToLower(connection) == "close" {
+			log.Println("链接关闭")
 			conn.Close()
 		}
 	}()

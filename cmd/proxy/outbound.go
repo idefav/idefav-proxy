@@ -31,7 +31,6 @@ func (o *OutboundServer) proc(ln net.Listener) error {
 			atomic.AddInt32(&o.NumOpen, 1)
 			defer atomic.AddInt32(&o.NumOpen, -1)
 			log.Printf("remoteAddr: %s --> localAddr: %s", conn.RemoteAddr(), conn.LocalAddr())
-			log.Println("conn:", &conn)
 
 			var dst_host = ""
 			dst, host, tcpConn, err := socket.GetOriginalDst(conn.(*net.TCPConn))

@@ -57,7 +57,6 @@ func (inProxyServer *InProxyServer) proc(ln net.Listener) error {
 			defer atomic.AddInt32(&inProxyServer.NumOpen, -1)
 			log.Println("numOpen:", inProxyServer.NumOpen)
 			log.Printf("removeAddr: %s --> localAddr: %s", conn.RemoteAddr(), conn.LocalAddr())
-			log.Println("conn:", &conn)
 
 			var dst_host = ""
 			_, host, _, err := socket.GetOriginalDst(conn.(*net.TCPConn))
